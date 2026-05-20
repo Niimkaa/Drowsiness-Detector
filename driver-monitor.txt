@@ -1,0 +1,36 @@
+[Unit]
+Description=Driver Drowsiness Monitor (MediaPipe + OBD-II + Flask-SocketIO)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/driver-monitor
+Environment="PATH=/home/pi/driver-monitor/.venv/bin"
+Environment="MODEL_PATH=/home/pi/driver-monitor/models/face_landmarker.task"
+Environment="CAM_INDEX=0"
+Environment="HOST=0.0.0.0"
+Environment="PORT=5000"
+# For ELM327 emulator over TCP:
+# Environment="OBD_PORT=socket://127.0.0.1:35000"
+# For pseudo-tty (when running `elm` locally):
+# Environment="OBD_PORT=/dev/pts/3"
+
+ExecStart=/home/pi/driver-monitor/.venv/bin/python -m src.app
+
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/driver-monitor/logs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

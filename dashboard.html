@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DRIVER MONITOR // TELEMETRY</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;500;700&family=Anton&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0d0f;
+    --panel: #11171a;
+    --line: #1f2a30;
+    --text: #d7e1e3;
+    --dim: #5a6770;
+    --ok: #6ee787;
+    --warn: #ffb13b;
+    --alarm: #ff3b5c;
+    --accent: #38e8c7;
+    --grid: rgba(56, 232, 199, 0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    overflow: hidden;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Top bar — mission-control style */
+  header {
+    height: 48px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 24px;
+    background: rgba(10, 13, 15, 0.85);
+    backdrop-filter: blur(6px);
+  }
+  header .brand {
+    font-family: 'Anton', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.12em;
+  }
+  header .brand span { color: var(--accent); }
+  header .sep { width: 1px; height: 24px; background: var(--line); }
+  header .pill {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  header .pill b { color: var(--text); font-weight: 500; }
+  header .right { margin-left: auto; display: flex; gap: 20px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot.ok    { background: var(--ok);    box-shadow: 0 0 8px var(--ok); }
+  .dot.warn  { background: var(--warn);  box-shadow: 0 0 8px var(--warn); }
+  .dot.alarm { background: var(--alarm); box-shadow: 0 0 12px var(--alarm); animation: pulse 0.6s infinite; }
+  .dot.off   { background: var(--dim); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* Main grid */
+  main {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    grid-template-rows: auto auto 1fr;
+    gap: 14px;
+    padding: 16px;
+    height: calc(100vh - 48px);
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    position: relative;
+    padding: 14px 16px;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 24px; height: 1px;
+    background: var(--accent);
+  }
+  .panel h2 {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-weight: 500;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  /* Status banner */
+  #status-banner {
+    grid-column: 1 / -1;
+    padding: 18px 24px;
+    border-left: 4px solid var(--ok);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  #status-banner.warn  { border-left-color: var(--warn);  background: linear-gradient(90deg, rgba(255,177,59,0.08), transparent); }
+  #status-banner.alarm { border-left-color: var(--alarm); background: linear-gradient(90deg, rgba(255,59,92,0.12), transparent); animation: alarm-bg 0.8s infinite; }
+  @keyframes alarm-bg {
+    0%, 100% { background: linear-gradient(90deg, rgba(255,59,92,0.12), transparent); }
+    50%      { background: linear-gradient(90deg, rgba(255,59,92,0.28), transparent); }
+  }
+  #status-banner .label {
+    font-family: 'Anton', sans-serif;
+    font-size: 38px;
+    letter-spacing: 0.08em;
+  }
+  #status-banner .desc {
+    color: var(--dim);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Big number */
+  .big {
+    font-family: 'Anton', sans-serif;
+    font-size: 64px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+  }
+  .big .unit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--dim);
+    font-weight: 300;
+    letter-spacing: 0.2em;
+    margin-left: 6px;
+  }
+  .sub {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* Metric rows */
+  .row { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .row:last-child { border-bottom: none; }
+  .row .k { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--dim); }
+  .row .v { font-size: 16px; font-weight: 500; }
+  .v.ok    { color: var(--ok); }
+  .v.warn  { color: var(--warn); }
+  .v.alarm { color: var(--alarm); }
+
+  /* Bar — for EAR / MAR / PERCLOS */
+  .bar { height: 4px; background: var(--line); margin-top: 6px; position: relative; }
+  .bar > div { height: 100%; background: var(--accent); transition: width 0.15s linear; }
+  .bar.warn > div { background: var(--warn); }
+  .bar.alarm > div { background: var(--alarm); }
+
+  /* Stream */
+  .stream-wrap {
+    grid-column: 1;
+    grid-row: 3;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .stream-wrap .head { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  .stream-wrap .head h2 { margin: 0; }
+  .stream-wrap .head h2::after { display: none; }
+  .stream-wrap .body { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; }
+  .stream-wrap img { max-width: 100%; max-height: 100%; }
+  .stream-wrap .corner { position: absolute; width: 14px; height: 14px; border: 1px solid var(--accent); }
+  .stream-wrap .corner.tl { top: 8px; left: 8px; border-right: 0; border-bottom: 0; }
+  .stream-wrap .corner.tr { top: 8px; right: 8px; border-left: 0; border-bottom: 0; }
+  .stream-wrap .corner.bl { bottom: 8px; left: 8px; border-right: 0; border-top: 0; }
+  .stream-wrap .corner.br { bottom: 8px; right: 8px; border-left: 0; border-top: 0; }
+  .stream-toggle {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  .stream-toggle:hover { background: var(--accent); color: var(--bg); }
+
+  /* Driver metrics panel */
+  .driver { grid-column: 2; grid-row: 3; }
+  .vehicle { grid-column: 3; grid-row: 3; }
+
+  /* Hero metrics row */
+  .hero { grid-row: 2; display: flex; flex-direction: column; justify-content: space-between; }
+  .hero .big { color: var(--accent); }
+  .hero.alarm .big { color: var(--alarm); }
+
+  /* Timestamp footer */
+  footer {
+    position: fixed;
+    bottom: 6px;
+    right: 14px;
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 0.15em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">DRIVER<span>·</span>MONITOR</div>
+  <div class="sep"></div>
+  <div class="pill">SESSION <b id="session-time">00:00:00</b></div>
+  <div class="pill">FPS <b id="fps">--</b></div>
+  <div class="right">
+    <div class="pill"><span id="dot-det" class="dot off"></span>DETECTOR</div>
+    <div class="pill"><span id="dot-obd" class="dot off"></span>OBD<span style="color:var(--accent)">·</span>II</div>
+    <div class="pill"><span id="dot-ws" class="dot off"></span>SOCKET</div>
+  </div>
+</header>
+
+<main>
+  <div id="status-banner" class="panel">
+    <div>
+      <div class="label" id="status-label">MONITORING</div>
+      <div class="desc" id="status-desc">All signals nominal</div>
+    </div>
+    <div style="margin-left:auto; text-align: right;">
+      <div class="sub">ALERT LEVEL</div>
+      <div class="big" id="alert-level" style="font-size: 48px;">0<span class="unit">/2</span></div>
+    </div>
+  </div>
+
+  <div class="panel hero" id="hero-perclos">
+    <h2>PERCLOS · 60s WINDOW</h2>
+    <div>
+      <div class="big"><span id="perclos-val">0</span><span class="unit">%</span></div>
+      <div class="sub">Eye-closure percentage</div>
+    </div>
+    <div class="bar" id="perclos-bar"><div style="width:0%"></div></div>
+  </div>
+
+  <div class="panel hero">
+    <h2>EYES CLOSED · DURATION</h2>
+    <div>
+      <div class="big"><span id="closed-val">0.0</span><span class="unit">SEC</span></div>
+      <div class="sub">Microsleep counter</div>
+    </div>
+    <div class="bar" id="closed-bar"><div style="width:0%"></div></div>
+  </div>
+
+  <div class="panel hero">
+    <h2>VEHICLE SPEED</h2>
+    <div>
+      <div class="big"><span id="speed-val">0</span><span class="unit">KM/H</span></div>
+      <div class="sub">From OBD-II</div>
+    </div>
+    <div class="bar"><div id="speed-bar" style="width:0%; background: var(--accent);"></div></div>
+  </div>
+
+  <div class="panel stream-wrap">
+    <div class="head">
+      <h2>CAMERA FEED</h2>
+      <button class="stream-toggle" id="stream-toggle">ENABLE</button>
+    </div>
+    <div class="body">
+      <span class="corner tl"></span><span class="corner tr"></span>
+      <span class="corner bl"></span><span class="corner br"></span>
+      <img id="stream" alt="" style="display:none">
+      <div id="stream-placeholder" style="color: var(--dim); font-size: 11px; letter-spacing: 0.15em;">FEED DISABLED</div>
+    </div>
+  </div>
+
+  <div class="panel driver">
+    <h2>DRIVER METRICS</h2>
+    <div class="row"><span class="k">Face detected</span><span class="v" id="face">—</span></div>
+    <div class="row"><span class="k">EAR (eye)</span><span class="v" id="ear">—</span></div>
+    <div class="row"><span class="k">MAR (mouth)</span><span class="v" id="mar">—</span></div>
+    <div class="row"><span class="k">Yawning</span><span class="v" id="yawn">—</span></div>
+    <div class="row"><span class="k">Head down</span><span class="v" id="head">—</span></div>
+    <div class="row"><span class="k">Drowsy flag</span><span class="v" id="drowsy">—</span></div>
+  </div>
+
+  <div class="panel vehicle">
+    <h2>VEHICLE TELEMETRY</h2>
+    <div class="row"><span class="k">RPM</span><span class="v" id="rpm">—</span></div>
+    <div class="row"><span class="k">Throttle</span><span class="v" id="throttle">—</span></div>
+    <div class="row"><span class="k">Engine load</span><span class="v" id="load">—</span></div>
+    <div class="row"><span class="k">Coolant</span><span class="v" id="coolant">—</span></div>
+    <div class="row"><span class="k">Fuel level</span><span class="v" id="fuel">—</span></div>
+    <div class="row"><span class="k">OBD link</span><span class="v" id="obd-status">—</span></div>
+  </div>
+</main>
+
+<footer><span id="now">--:--:--</span></footer>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const sessionStart = Date.now();
+
+  // Clock + session timer
+  setInterval(() => {
+    const d = new Date();
+    $('now').textContent = d.toISOString().substr(11, 8) + ' UTC';
+    const s = Math.floor((Date.now() - sessionStart) / 1000);
+    const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    $('session-time').textContent = `${hh}:${mm}:${ss}`;
+  }, 500);
+
+  // Stream toggle
+  const streamBtn = $('stream-toggle');
+  const streamImg = $('stream');
+  const streamPh  = $('stream-placeholder');
+  let streamOn = false;
+  streamBtn.onclick = () => {
+    streamOn = !streamOn;
+    if (streamOn) {
+      streamImg.src = '/stream.mjpg?ts=' + Date.now();
+      streamImg.style.display = 'block';
+      streamPh.style.display = 'none';
+      streamBtn.textContent = 'DISABLE';
+    } else {
+      streamImg.src = '';
+      streamImg.style.display = 'none';
+      streamPh.style.display = 'block';
+      streamBtn.textContent = 'ENABLE';
+    }
+  };
+
+  // Socket
+  const socket = io({ transports: ['websocket'] });
+  socket.on('connect',    () => { $('dot-ws').className = 'dot ok'; });
+  socket.on('disconnect', () => {
+    $('dot-ws').className = 'dot off';
+    $('dot-det').className = 'dot off';
+    $('dot-obd').className = 'dot off';
+  });
+
+  // Detection handler
+  socket.on('detection', d => {
+    $('dot-det').className = 'dot ok';
+    $('fps').textContent = d.fps.toFixed(1);
+
+    $('face').textContent    = d.face_detected ? 'YES' : 'NO';
+    $('face').className      = 'v ' + (d.face_detected ? 'ok' : 'warn');
+    $('ear').textContent     = d.ear.toFixed(3);
+    $('mar').textContent     = d.mar.toFixed(3);
+    $('yawn').textContent    = d.yawning ? 'YES' : 'no';
+    $('yawn').className      = 'v ' + (d.yawning ? 'warn' : '');
+    $('head').textContent    = d.head_down ? 'YES' : 'no';
+    $('head').className      = 'v ' + (d.head_down ? 'alarm' : '');
+    $('drowsy').textContent  = d.drowsy ? 'YES' : 'no';
+    $('drowsy').className    = 'v ' + (d.drowsy ? 'alarm' : 'ok');
+
+    const perc = Math.round(d.perclos * 100);
+    $('perclos-val').textContent = perc;
+    const pBar = $('perclos-bar');
+    pBar.firstElementChild.style.width = Math.min(100, perc * 2) + '%';
+    pBar.className = 'bar' + (perc >= 30 ? ' alarm' : perc >= 20 ? ' warn' : '');
+
+    $('closed-val').textContent = d.eyes_closed_for.toFixed(1);
+    const cBar = $('closed-bar');
+    const cPct = Math.min(100, (d.eyes_closed_for / 2.0) * 100);
+    cBar.firstElementChild.style.width = cPct + '%';
+    cBar.className = 'bar' + (d.eyes_closed_for >= 1.2 ? ' alarm' : d.eyes_closed_for >= 0.5 ? ' warn' : '');
+
+    // Status banner
+    const banner = $('status-banner');
+    const label = $('status-label');
+    const desc = $('status-desc');
+    $('alert-level').firstChild.textContent = d.alert_level;
+    banner.className = 'panel';
+    if (d.alert_level === 2) {
+      banner.classList.add('alarm');
+      label.textContent = 'DROWSINESS DETECTED';
+      desc.textContent = d.head_down ? 'Head dropped — alert driver immediately' : 'Microsleep / PERCLOS threshold exceeded';
+    } else if (d.alert_level === 1) {
+      banner.classList.add('warn');
+      label.textContent = 'CAUTION';
+      desc.textContent = d.yawning ? 'Yawning detected' : 'Elevated eye-closure';
+    } else {
+      label.textContent = 'MONITORING';
+      desc.textContent = d.face_detected ? 'All signals nominal' : 'No face — adjust camera';
+    }
+  });
+
+  // OBD handler
+  socket.on('obd', o => {
+    $('dot-obd').className = 'dot ' + (o.connected ? 'ok' : 'off');
+    $('obd-status').textContent = o.connected ? 'LINKED' : 'NO LINK';
+    $('obd-status').className   = 'v ' + (o.connected ? 'ok' : 'warn');
+    $('speed-val').textContent  = Math.round(o.speed_kmh);
+    $('speed-bar').style.width  = Math.min(100, o.speed_kmh / 1.8) + '%';
+    $('rpm').textContent        = Math.round(o.rpm);
+    $('throttle').textContent   = o.throttle.toFixed(1) + ' %';
+    $('load').textContent       = o.engine_load.toFixed(1) + ' %';
+    $('coolant').textContent    = o.coolant_temp.toFixed(0) + ' °C';
+    $('fuel').textContent       = o.fuel_level.toFixed(0) + ' %';
+  });
+})();
+</script>
+</body>
+</html>
